@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WRC Broadcast UI Replica</title>
+<title>WRC Broadcast UI Replica - Editable</title>
 <style>
     /* =========================================================
-       1. フォントの読み込み（アップロードされたファイルへのパス）
+       1. フォントの読み込み
        ========================================================= */
     @font-face {
         font-family: 'WRCCleanRoman';
@@ -23,247 +23,292 @@
         font-style: normal;
     }
 
-    /* 汎用クラス */
     .font-roman { font-family: 'WRCCleanRoman', sans-serif; font-weight: normal; }
     .font-bold { font-family: 'WRCCleanBold', sans-serif; font-weight: bold; }
 
-    /* =========================================================
-       2. ベース設定・背景（路面ディテールの確認用）
-       ========================================================= */
     body, html {
         margin: 0;
         padding: 0;
         width: 100%;
         height: 100vh;
-        /* 背景にアスファルトのような画像を置くと75%透過グレーが映えます */
         background: url('https://images.unsplash.com/photo-1541443131586-f4a43b184f49?q=80&w=2000&auto=format&fit=crop') center/cover no-repeat;
         overflow: hidden;
+        font-family: sans-serif;
     }
 
     /* =========================================================
-       3. UIコンテナレイアウト（浮遊型・ジェスチャーバー回避）
+       2. エディター（コントロールパネル）
+       ========================================================= */
+    #editor-panel {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        z-index: 100;
+        width: 320px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    #editor-panel h3 { margin: 0 0 10px 0; font-size: 16px; border-bottom: 1px solid #555; padding-bottom: 5px; }
+    .input-group { display: flex; flex-direction: column; gap: 4px; }
+    .input-group label { font-size: 12px; color: #aaa; }
+    .input-group input { padding: 6px; border: 1px solid #444; background: #222; color: white; border-radius: 4px; }
+    .timer-controls { display: flex; gap: 5px; }
+    .timer-controls button { flex: 1; padding: 6px; cursor: pointer; background: #FF5500; color: white; border: none; border-radius: 4px; font-weight: bold;}
+    .timer-controls button.stop { background: #555; }
+
+    /* =========================================================
+       3. UIコンテナレイアウト
        ========================================================= */
     .wrc-ui-container {
         position: fixed;
-        bottom: 45px; /* スマホ等のジェスチャーバーを避ける隙間 */
+        bottom: 45px;
         left: 5%;
         right: 5%;
-        height: 80px; /* 右側のロゴパネルの最大高さに合わせる */
+        height: 80px;
         display: flex;
-        align-items: flex-end; /* 下端揃え */
-        text-transform: uppercase; /* すべて大文字にして高さを一定に */
+        align-items: flex-end;
+        text-transform: uppercase;
     }
-
-    /* すべてのテキストにドロップシャドウを適用 */
-    .wrc-text-shadow {
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
-    }
+    .wrc-text-shadow { text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6); }
 
     /* =========================================================
-       4. メインバー（グレーとオレンジのテロップ）
+       4. メインバー
        ========================================================= */
     .wrc-main-bar {
         position: absolute;
         left: 0;
         bottom: 0;
         width: 100%;
-        height: 64px; /* TVセーフエリア規定に基づく厚み */
+        height: 64px;
         display: flex;
-        gap: 2px; /* オレンジとグレーのつなぎ目の1〜2pxの細い隙間 */
-        /* 上辺が右、下辺が左の「／」角度。子要素のテキストも15度右に傾斜します */
+        gap: 2px;
         transform: skewX(-15deg);
         transform-origin: bottom left;
         z-index: 5;
     }
 
-    /* 左側：オレンジエリア（時間情報） */
+    /* 左側：オレンジエリア（タイマー） */
     .wrc-zone-orange {
-        background-color: #FF5500; /* 発光しているような高彩度オレンジ */
-        flex: 0 0 160px; /* 文字の長さに合わせて可変せず一定の幅 */
-        border-radius: 6px; /* 角丸の処理（境界にも適用） */
-        border: 1px solid rgba(255, 255, 255, 0.2); /* 1pxの外枠 */
+        background-color: #FF5500;
+        flex: 0 0 160px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
         display: flex;
         align-items: center;
-        justify-content: flex-end; /* 右揃えで境界線を挟んで対比 */
+        justify-content: flex-end;
         padding-right: 15px;
     }
+    .wrc-time-wrapper { color: #FFFFFF; display: flex; align-items: baseline; }
+    .wrc-time-digits { font-variant-numeric: tabular-nums; font-size: 26px; }
 
-    .wrc-time-wrapper {
-        color: #FFFFFF;
-        display: flex;
-        align-items:baseline;
-    }
-
-    .wrc-time-digits {
-        font-variant-numeric: tabular-nums; /* 等幅フォント化 */
-        font-size: 26px;
-    }
-
-    .wrc-time-colon {
-        font-family: 'WRCCleanRoman', sans-serif;
-        font-weight: normal; /* 数字より少し細いデザイン */
-        margin: 0 2px;
-        opacity: 0.9;
-    }
-
-    .wrc-time-local {
-        font-size: 13px;
-        margin-left: 8px;
-    }
-
-    /* 右側：グレーエリア（番組情報・ハッシュタグ） */
+    /* 右側：グレーエリア */
     .wrc-zone-gray {
-        background-color: rgba(40, 42, 45, 0.75); /* アスファルトを連想させるチャコールグレー（75%透過） */
-        flex-grow: 1; /* 残りの幅を埋める */
+        background-color: rgba(40, 42, 45, 0.75);
+        flex-grow: 1;
         border-radius: 6px;
-        border: 1px solid rgba(255, 255, 255, 0.2); /* 1pxの外枠 */
+        border: 1px solid rgba(255, 255, 255, 0.2);
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding-left: 20px;
-        padding-right: 230px; /* 右下のロゴパネルにぶつからないギリギリの余白 */
+        padding-right: 230px;
     }
 
-    .wrc-gray-left {
+    /* 2段組みになったテキストエリア */
+    .wrc-gray-text-block {
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        justify-content: center;
     }
-
     .wrc-coming-up {
-        color: #FF5500; /* 背景のグレーと補色関係にあるオレンジ */
+        color: #FFFFFF; /* 白色に変更 */
         font-size: 14px;
-        letter-spacing: 2px; /* 十分な余白（レタースペーシング） */
-        margin-right: 16px;
+        letter-spacing: 2px;
+        margin-bottom: 2px;
     }
-
-    .wrc-show-title {
+    .wrc-show-details {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
         color: #FFFFFF;
-        font-size: 24px;
-        /* Boldを使用し、他の文字より1.5倍太く見せる */
     }
-
-    .wrc-hashtag {
-        color: #D0D0D0; /* 真っ白ではなく少しグレーに寄せる */
-        font-size: 20px;
-    }
+    
+    /* 下段テキストの各パーツ */
+    .wrc-left-text { color: #FF5500; font-size: 16px; } /* アクセントとしてオレンジを維持 */
+    .wrc-middle-time { font-size: 18px; }
+    .wrc-local-text { font-size: 13px; margin-right: 8px; }
+    .wrc-show-title { font-size: 24px; }
+    .wrc-hashtag { color: #D0D0D0; font-size: 20px; }
 
     /* =========================================================
-       5. 右下ロゴパネル（一番上のレイヤー）
+       5. 右下ロゴパネル
        ========================================================= */
     .wrc-logo-panel {
         position: absolute;
         right: 0;
         bottom: 0;
-        height: 76px; /* メインバーよりわずかに大きい高さ */
+        height: 76px;
         display: flex;
         gap: 2px;
-        transform: skewX(-15deg); /* バーと同じ斜めカット */
+        transform: skewX(-15deg);
         transform-origin: bottom right;
-        z-index: 10; /* 手前にあるように見せるレイヤー処理 */
+        z-index: 10;
     }
-
-    /* 青いRロゴエリア */
     .wrc-logo-blue {
-        background-color: #001A70; /* WRC公式ブランドブルー */
+        background-color: #001A70;
         width: 60px;
         border-radius: 6px;
         border: 1px solid rgba(255, 255, 255, 0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: flex; align-items: center; justify-content: center;
     }
-
-    .wrc-logo-r {
-        color: #FFFFFF;
-        font-size: 40px;
-        line-height: 1;
-    }
-
-    /* 大会詳細情報エリア（白背景） */
     .wrc-logo-white {
         background-color: #FFFFFF;
         width: 150px;
         border-radius: 6px;
         border: 1px solid rgba(255, 255, 255, 0.3);
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding-left: 15px;
-        position: relative; /* バッジ配置用 */
+        position: relative;
     }
-
-    /* 差し色の赤いバッジ */
     .wrc-red-badge {
-        position: absolute;
-        top: 8px;
-        right: 10px;
-        width: 6px;
-        height: 6px;
-        background-color: #E60000;
-        border-radius: 1px;
-    }
-
-    .wrc-event-details {
-        color: #1E2023;
-        font-size: 12px;
-        line-height: 1.1;
-        margin-bottom: 6px;
-        /* 小さいフォントサイズで高密度に配置 */
-    }
-
-    /* スポンサーロゴのグリッド（ダミー配置） */
-    .wrc-sponsor-grid {
-        display: flex;
-        gap: 4px;
-    }
-
-    .wrc-sponsor-placeholder {
-        width: 18px;
-        height: 8px;
-        background-color: #B0B0B0;
-        border-radius: 1.5px;
+        position: absolute; top: 8px; right: 10px; width: 6px; height: 6px;
+        background-color: #E60000; border-radius: 1px;
     }
 </style>
 </head>
 <body>
 
+<div id="editor-panel">
+    <h3>UI Editor</h3>
+    
+    <div class="input-group">
+        <label>Timer (Seconds)</label>
+        <div class="timer-controls">
+            <input type="number" id="edit-timer-val" value="600" style="width: 80px;">
+            <button id="btn-timer-start" onclick="startTimer()">Start</button>
+            <button class="stop" id="btn-timer-stop" onclick="stopTimer()">Stop</button>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <label>Top Text</label>
+        <input type="text" id="edit-top" value="COMING UP NEXT" oninput="updateText('top-text', this.value)">
+    </div>
+    
+    <div class="input-group">
+        <label>Left Text (Next to Time)</label>
+        <input type="text" id="edit-left" value="START" oninput="updateText('left-text', this.value)">
+    </div>
+
+    <div class="input-group">
+        <label>Time Text</label>
+        <input type="text" id="edit-time" value="10:00" oninput="updateText('time-text', this.value)">
+    </div>
+
+    <div class="input-group">
+        <label>Unit Text</label>
+        <input type="text" id="edit-local" value="LOCAL" oninput="updateText('local-text', this.value)">
+    </div>
+
+    <div class="input-group">
+        <label>Main Title</label>
+        <input type="text" id="edit-title" value="SHAKEDOWN LIVE" oninput="updateText('title-text', this.value)">
+    </div>
+
+    <div class="input-group">
+        <label>Hashtag</label>
+        <input type="text" id="edit-hashtag" value="#WRC" oninput="updateText('hashtag-text', this.value)">
+    </div>
+</div>
+
 <div class="wrc-ui-container">
     <div class="wrc-main-bar">
         <div class="wrc-zone-orange">
             <div class="wrc-time-wrapper wrc-text-shadow">
-                <span class="font-bold wrc-time-digits">10<span class="wrc-time-colon">:</span>00</span>
-                <span class="font-roman wrc-time-local">LOCAL</span>
+                <span class="font-bold wrc-time-digits" id="timer-display">10:00</span>
             </div>
         </div>
 
         <div class="wrc-zone-gray">
-            <div class="wrc-gray-left wrc-text-shadow">
-                <span class="font-bold wrc-coming-up">COMING UP NEXT</span>
-                <span class="font-bold wrc-show-title">SHAKEDOWN LIVE</span>
+            <div class="wrc-gray-text-block wrc-text-shadow">
+                <div class="font-bold wrc-coming-up" id="top-text">COMING UP NEXT</div>
+                <div class="wrc-show-details">
+                    <span class="font-bold wrc-left-text" id="left-text">START</span>
+                    <span class="font-bold wrc-middle-time" id="time-text">10:00</span>
+                    <span class="font-roman wrc-local-text" id="local-text">LOCAL</span>
+                    <span class="font-bold wrc-show-title" id="title-text">SHAKEDOWN LIVE</span>
+                </div>
             </div>
             <div class="wrc-gray-right wrc-text-shadow">
-                <span class="font-roman wrc-hashtag">#WRC</span>
+                <span class="font-roman wrc-hashtag" id="hashtag-text">#WRC</span>
             </div>
         </div>
     </div>
 
     <div class="wrc-logo-panel">
-        <div class="wrc-logo-blue">
-            <span class="font-bold wrc-logo-r">R</span>
-        </div>
+        <div class="wrc-logo-blue"></div>
         <div class="wrc-logo-white">
             <div class="wrc-red-badge"></div>
-            <div class="font-bold wrc-event-details">
-                RALLY FORUM<br>OKAZAKI
-            </div>
-            <div class="wrc-sponsor-grid">
-                <div class="wrc-sponsor-placeholder"></div>
-                <div class="wrc-sponsor-placeholder"></div>
-                <div class="wrc-sponsor-placeholder"></div>
-            </div>
         </div>
     </div>
 </div>
+
+<script>
+    // テキストのリアルタイム更新
+    function updateText(elementId, value) {
+        document.getElementById(elementId).innerText = value;
+    }
+
+    // タイマー機能のロジック
+    let timerInterval = null;
+    let remainingSeconds = 600; // 初期値10分
+
+    function formatTime(totalSeconds) {
+        const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+        const s = (totalSeconds % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    }
+
+    function updateTimerDisplay() {
+        document.getElementById('timer-display').innerText = formatTime(remainingSeconds);
+    }
+
+    function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        
+        // 入力欄から秒数を取得
+        const inputVal = parseInt(document.getElementById('edit-timer-val').value);
+        if(!isNaN(inputVal) && inputVal >= 0) {
+            remainingSeconds = inputVal;
+        }
+
+        updateTimerDisplay();
+
+        timerInterval = setInterval(() => {
+            if (remainingSeconds > 0) {
+                remainingSeconds--;
+                document.getElementById('edit-timer-val').value = remainingSeconds; // エディタ側も更新
+                updateTimerDisplay();
+            } else {
+                stopTimer();
+            }
+        }, 1000);
+    }
+
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+    }
+
+    // 初期表示設定
+    updateTimerDisplay();
+</script>
 
 </body>
 </html>
