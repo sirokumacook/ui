@@ -1,440 +1,269 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WRC Style Graphics Editor</title>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <style>
-    /* =========================================
-       フォント定義
-       ========================================= */
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WRC Broadcast UI Replica</title>
+<style>
+    /* =========================================================
+       1. フォントの読み込み（アップロードされたファイルへのパス）
+       ========================================================= */
     @font-face {
-      font-family: 'WRC Clean';
-      src: url('WRCCleanRoman.ttf') format('truetype');
-      font-weight: normal;
-      font-style: normal;
+        font-family: 'WRCCleanRoman';
+        src: url('./WRCCleanRoman.woff2') format('woff2'),
+             url('./WRCCleanRoman.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
     }
     @font-face {
-      font-family: 'WRC Clean';
-      src: url('WRCCleanBold.ttf') format('truetype');
-      font-weight: bold;
-      font-style: normal;
+        font-family: 'WRCCleanBold';
+        src: url('./WRCCleanBold.woff2') format('woff2'),
+             url('./WRCCleanBold.ttf') format('truetype');
+        font-weight: bold;
+        font-style: normal;
     }
 
-    /* =========================================
-       カラー・基本設計
-       ========================================= */
-    :root {
-      --color-navy: #12192B;
-      --color-orange: #FF6600;
-      --color-lblue: #33AADD;
-      --color-white: #F0F0F0;
-      --angle: -15deg;
-      --ease-in-out: cubic-bezier(0.2, 0.8, 0.2, 1.0);
-      --ease-out-fast: cubic-bezier(0.55, 0.05, 0.67, 0.19);
+    /* 汎用クラス */
+    .font-roman { font-family: 'WRCCleanRoman', sans-serif; font-weight: normal; }
+    .font-bold { font-family: 'WRCCleanBold', sans-serif; font-weight: bold; }
+
+    /* =========================================================
+       2. ベース設定・背景（路面ディテールの確認用）
+       ========================================================= */
+    body, html {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100vh;
+        /* 背景にアスファルトのような画像を置くと75%透過グレーが映えます */
+        background: url('https://images.unsplash.com/photo-1541443131586-f4a43b184f49?q=80&w=2000&auto=format&fit=crop') center/cover no-repeat;
+        overflow: hidden;
     }
 
-    body {
-      margin: 0;
-      font-family: 'WRC Clean', sans-serif;
-      background: #222;
-      color: #fff;
-      display: flex;
-      height: 100vh;
-      overflow: hidden;
-      text-transform: uppercase;
+    /* =========================================================
+       3. UIコンテナレイアウト（浮遊型・ジェスチャーバー回避）
+       ========================================================= */
+    .wrc-ui-container {
+        position: fixed;
+        bottom: 45px; /* スマホ等のジェスチャーバーを避ける隙間 */
+        left: 5%;
+        right: 5%;
+        height: 80px; /* 右側のロゴパネルの最大高さに合わせる */
+        display: flex;
+        align-items: flex-end; /* 下端揃え */
+        text-transform: uppercase; /* すべて大文字にして高さを一定に */
     }
 
-    /* =========================================
-       エディター (左側パネル)
-       ========================================= */
-    .editor-panel {
-      width: 400px;
-      background: #1a1a1a;
-      border-right: 1px solid #444;
-      padding: 20px;
-      overflow-y: auto;
-      box-sizing: border-box;
-    }
-    .editor-panel h2 {
-      margin-top: 0;
-      color: var(--color-orange);
-      font-weight: bold;
-    }
-    .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; margin-bottom: 5px; font-size: 12px; color: #aaa; }
-    .form-group input { 
-      width: 100%; padding: 8px; box-sizing: border-box; 
-      background: #333; color: #fff; border: 1px solid #555;
-      font-family: sans-serif;
-    }
-    .driver-edit {
-      border: 1px solid #444; padding: 10px; margin-bottom: 10px; background: #2a2a2a;
-    }
-    .driver-edit h4 { margin: 0 0 10px 0; }
-    .btn {
-      display: block; width: 100%; padding: 15px; background: var(--color-orange);
-      color: #fff; text-align: center; font-weight: bold; font-family: 'WRC Clean', sans-serif;
-      cursor: pointer; border: none; font-size: 18px; margin-bottom: 10px;
-      transition: background 0.2s;
-    }
-    .btn:hover { background: #e05c00; }
-    .btn-secondary { background: #444; }
-    .btn-secondary:hover { background: #555; }
-
-    /* =========================================
-       プレビュー領域 (右側パネル / フルスクリーン)
-       ========================================= */
-    .preview-container {
-      flex: 1;
-      position: relative;
-      background: #000 url('https://images.unsplash.com/photo-1549427670-36b13cfafb00?q=80&w=1920&auto=format&fit=crop') center/cover;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
+    /* すべてのテキストにドロップシャドウを適用 */
+    .wrc-text-shadow {
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.6);
     }
 
-    /* 16:9 のグラフィックベース */
-    .wrc-graphic {
-      width: 100%;
-      max-width: 1920px;
-      aspect-ratio: 16 / 9;
-      position: relative;
-      /* CSS変数でアニメーション状態を制御 */
-      --in-progress: 0; 
-      --out-progress: 0;
+    /* =========================================================
+       4. メインバー（グレーとオレンジのテロップ）
+       ========================================================= */
+    .wrc-main-bar {
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        height: 64px; /* TVセーフエリア規定に基づく厚み */
+        display: flex;
+        gap: 2px; /* オレンジとグレーのつなぎ目の1〜2pxの細い隙間 */
+        /* 上辺が右、下辺が左の「／」角度。子要素のテキストも15度右に傾斜します */
+        transform: skewX(-15deg);
+        transform-origin: bottom left;
+        z-index: 5;
     }
 
-    .graphic-inner {
-      position: absolute;
-      top: 10%; bottom: 10%; left: 5%; right: 5%;
-      display: flex;
-      gap: 2%;
+    /* 左側：オレンジエリア（時間情報） */
+    .wrc-zone-orange {
+        background-color: #FF5500; /* 発光しているような高彩度オレンジ */
+        flex: 0 0 160px; /* 文字の長さに合わせて可変せず一定の幅 */
+        border-radius: 6px; /* 角丸の処理（境界にも適用） */
+        border: 1px solid rgba(255, 255, 255, 0.2); /* 1pxの外枠 */
+        display: flex;
+        align-items: center;
+        justify-content: flex-end; /* 右揃えで境界線を挟んで対比 */
+        padding-right: 15px;
     }
 
-    /* 共通のスラント（斜め）要素 */
-    .slant-box {
-      transform: skewX(var(--angle));
-      overflow: hidden;
-      position: relative;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.2);
-    }
-    .unslant {
-      transform: skewX(calc(var(--angle) * -1));
+    .wrc-time-wrapper {
+        color: #FFFFFF;
+        display: flex;
+        align-items:baseline;
     }
 
-    /* === 左ペイン (1位〜3位) === */
-    .left-pane {
-      width: 30%;
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-      z-index: 10;
+    .wrc-time-digits {
+        font-variant-numeric: tabular-nums; /* 等幅フォント化 */
+        font-size: 26px;
     }
 
-    .card {
-      position: relative;
-      display: flex;
-      align-items: stretch;
-      opacity: 0;
-      transform: translateX(-100px);
+    .wrc-time-colon {
+        font-family: 'WRCCleanRoman', sans-serif;
+        font-weight: normal; /* 数字より少し細いデザイン */
+        margin: 0 2px;
+        opacity: 0.9;
     }
 
-    .card-rank {
-      width: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-      font-weight: bold;
-      z-index: 2;
-    }
-    
-    /* 1位特化スタイル */
-    .card.rank-1 { height: 180px; }
-    .card.rank-1 .bg-plate { background: var(--color-orange); box-shadow: 0 0 15px rgba(255,102,0,0.5); }
-    .card.rank-1 .card-rank { font-size: 50px; text-shadow: 0 0 10px rgba(255,255,255,0.5); }
-    
-    /* 2, 3位スタイル */
-    .card.rank-other { height: 120px; }
-    .card.rank-other .bg-plate { background: var(--color-navy); border-left: 6px solid var(--color-lblue); }
-    .card.rank-other .card-rank { color: var(--color-lblue); }
-
-    .bg-plate {
-      position: absolute; top:0; left:0; right:0; bottom:0;
-      z-index: 1; transform-origin: left;
+    .wrc-time-local {
+        font-size: 13px;
+        margin-left: 8px;
     }
 
-    .card-content {
-      position: relative; z-index: 2; flex: 1; display: flex; align-items: center;
-      padding-left: 10px;
-    }
-    .card-photo {
-      height: 120%; width: auto; max-width: 150px; object-fit: contain;
-      position: absolute; right: -20px; bottom: 0;
-      filter: drop-shadow(-5px 0 10px rgba(0,0,0,0.5));
-    }
-    .card-name { font-size: 28px; font-weight: bold; color: var(--color-white); z-index: 3;}
-    .card-name span { font-weight: normal; display: block; font-size: 18px; }
-
-    /* === 中央・右ペイン (ヘッダーと4位〜10位リスト) === */
-    .right-pane {
-      width: 65%;
-      display: flex;
-      flex-direction: column;
+    /* 右側：グレーエリア（番組情報・ハッシュタグ） */
+    .wrc-zone-gray {
+        background-color: rgba(40, 42, 45, 0.75); /* アスファルトを連想させるチャコールグレー（75%透過） */
+        flex-grow: 1; /* 残りの幅を埋める */
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2); /* 1pxの外枠 */
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-left: 20px;
+        padding-right: 230px; /* 右下のロゴパネルにぶつからないギリギリの余白 */
     }
 
-    .header-bar {
-      height: 60px;
-      background: var(--color-navy);
-      display: flex;
-      align-items: center;
-      padding: 0 30px;
-      margin-bottom: 20px;
-      opacity: 0;
-      transform: translateX(-50px);
-    }
-    .header-bar .title { font-size: 32px; font-weight: bold; letter-spacing: 0.2em; color: var(--color-white); }
-    .header-bar .subtitle { font-size: 18px; color: var(--color-orange); margin-left: auto; letter-spacing: 0.1em; }
-
-    .list-container {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+    .wrc-gray-left {
+        display: flex;
+        align-items: center;
     }
 
-    .list-row {
-      background: rgba(18, 25, 43, 0.9); /* navy */
-      height: 45px;
-      display: flex;
-      align-items: center;
-      padding-right: 20px;
-      opacity: 0;
-      transform: translateX(-50px);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
-    }
-    
-    .list-rank {
-      background: var(--color-orange);
-      width: 50px; height: 100%;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: bold; font-size: 22px; margin-right: 20px;
-    }
-    .list-name { font-size: 20px; color: var(--color-white); display: flex; gap: 8px;}
-    .list-name strong { font-weight: bold; }
-    
-    .list-assets { display: flex; align-items: center; margin-left: 30px; gap: 15px; }
-    .list-flag { width: 30px; height: 20px; object-fit: cover; }
-    .list-brand { height: 24px; filter: brightness(0) invert(1); }
-
-    .list-points {
-      margin-left: auto;
-      font-size: 28px; font-weight: bold; color: var(--color-white);
-      display: flex; align-items: baseline; gap: 5px;
-    }
-    .list-points span { font-size: 14px; color: var(--color-orange); font-weight: normal;}
-
-    /* =========================================
-       アニメーション・クラス (State: In)
-       ========================================= */
-    .animate-in .card {
-      animation: slideInLeft 0.5s var(--ease-in-out) forwards;
-    }
-    .animate-in .bg-plate {
-      animation: stretchIn 0.3s var(--ease-in-out) forwards;
-    }
-    .animate-in .header-bar {
-      animation: slideInFade 0.5s var(--ease-in-out) forwards;
-      animation-delay: 0.1s;
-    }
-    .animate-in .list-row {
-      animation: slideInFade 0.4s var(--ease-in-out) forwards;
+    .wrc-coming-up {
+        color: #FF5500; /* 背景のグレーと補色関係にあるオレンジ */
+        font-size: 14px;
+        letter-spacing: 2px; /* 十分な余白（レタースペーシング） */
+        margin-right: 16px;
     }
 
-    @keyframes slideInLeft {
-      0% { opacity: 0; transform: translateX(-150px); }
-      100% { opacity: 1; transform: translateX(0); }
-    }
-    @keyframes stretchIn {
-      0% { transform: scaleX(0); }
-      100% { transform: scaleX(1); }
-    }
-    @keyframes slideInFade {
-      0% { opacity: 0; transform: translateX(-50px); }
-      100% { opacity: 1; transform: translateX(0); }
+    .wrc-show-title {
+        color: #FFFFFF;
+        font-size: 24px;
+        /* Boldを使用し、他の文字より1.5倍太く見せる */
     }
 
-    /* =========================================
-       アニメーション・クラス (State: Out)
-       ========================================= */
-    .animate-out .card {
-      animation: slideOutLeft 0.4s var(--ease-out-fast) forwards;
-    }
-    .animate-out .header-bar,
-    .animate-out .list-row {
-      animation: slideOutRight 0.3s var(--ease-out-fast) forwards;
-    }
-    /* 中身のテキストを先に消す */
-    .animate-out .unslant {
-      animation: fadeOut 0.15s forwards;
+    .wrc-hashtag {
+        color: #D0D0D0; /* 真っ白ではなく少しグレーに寄せる */
+        font-size: 20px;
     }
 
-    @keyframes slideOutLeft {
-      0% { transform: translateX(0); opacity: 1; }
-      100% { transform: translateX(-100vw); opacity: 0; }
-    }
-    @keyframes slideOutRight {
-      0% { transform: translateX(0); opacity: 1; }
-      100% { transform: translateX(100vw); opacity: 0; }
-    }
-    @keyframes fadeOut {
-      to { opacity: 0; transform: translateX(20px) skewX(calc(var(--angle) * -1)); }
+    /* =========================================================
+       5. 右下ロゴパネル（一番上のレイヤー）
+       ========================================================= */
+    .wrc-logo-panel {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        height: 76px; /* メインバーよりわずかに大きい高さ */
+        display: flex;
+        gap: 2px;
+        transform: skewX(-15deg); /* バーと同じ斜めカット */
+        transform-origin: bottom right;
+        z-index: 10; /* 手前にあるように見せるレイヤー処理 */
     }
 
-    /* フルスクリーン時のスタイル調整 */
-    :fullscreen .preview-container { width: 100vw; height: 100vh; }
+    /* 青いRロゴエリア */
+    .wrc-logo-blue {
+        background-color: #001A70; /* WRC公式ブランドブルー */
+        width: 60px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 
-  </style>
+    .wrc-logo-r {
+        color: #FFFFFF;
+        font-size: 40px;
+        line-height: 1;
+    }
+
+    /* 大会詳細情報エリア（白背景） */
+    .wrc-logo-white {
+        background-color: #FFFFFF;
+        width: 150px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding-left: 15px;
+        position: relative; /* バッジ配置用 */
+    }
+
+    /* 差し色の赤いバッジ */
+    .wrc-red-badge {
+        position: absolute;
+        top: 8px;
+        right: 10px;
+        width: 6px;
+        height: 6px;
+        background-color: #E60000;
+        border-radius: 1px;
+    }
+
+    .wrc-event-details {
+        color: #1E2023;
+        font-size: 12px;
+        line-height: 1.1;
+        margin-bottom: 6px;
+        /* 小さいフォントサイズで高密度に配置 */
+    }
+
+    /* スポンサーロゴのグリッド（ダミー配置） */
+    .wrc-sponsor-grid {
+        display: flex;
+        gap: 4px;
+    }
+
+    .wrc-sponsor-placeholder {
+        width: 18px;
+        height: 8px;
+        background-color: #B0B0B0;
+        border-radius: 1.5px;
+    }
+</style>
 </head>
 <body>
-  <div id="app" style="display:contents;">
-    
-    <div class="editor-panel">
-      <h2>GRAPHICS EDITOR</h2>
-      
-      <div class="form-group">
-        <label>TITLE</label>
-        <input type="text" v-model="headerTitle">
-      </div>
-      <div class="form-group">
-        <label>SUBTITLE</label>
-        <input type="text" v-model="headerSub">
-      </div>
 
-      <hr style="border-color: #333; margin: 20px 0;">
-
-      <h3>Drivers</h3>
-      <div v-for="(driver, index) in drivers" :key="index" class="driver-edit">
-        <h4>{{ index + 1 }}位</h4>
-        <div class="form-group"><label>FIRST NAME</label><input type="text" v-model="driver.firstName"></div>
-        <div class="form-group"><label>LAST NAME</label><input type="text" v-model="driver.lastName"></div>
-        <div class="form-group"><label>POINTS</label><input type="number" v-model="driver.points"></div>
-        <div class="form-group" v-if="index < 3"><label>PHOTO URL (透過PNG)</label><input type="text" v-model="driver.photo"></div>
-        <div class="form-group" v-if="index >= 3"><label>FLAG URL</label><input type="text" v-model="driver.flag"></div>
-        <div class="form-group" v-if="index >= 3"><label>BRAND LOGO URL</label><input type="text" v-model="driver.brand"></div>
-      </div>
-    </div>
-
-    <div class="preview-container" ref="previewArea">
-      
-      <div style="position: absolute; top: 20px; right: 20px; z-index: 1000; width: 250px;">
-        <button class="btn" @click="startAnimationIn">▶ PLAY IN</button>
-        <button class="btn btn-secondary" @click="startAnimationOut">■ PLAY OUT</button>
-        <button class="btn btn-secondary" @click="toggleFullScreen">⛶ FULL SCREEN</button>
-      </div>
-
-      <div class="wrc-graphic" :class="{'animate-in': state === 'in', 'animate-out': state === 'out'}">
-        <div class="graphic-inner">
-          
-          <div class="left-pane">
-            <div v-for="(driver, index) in drivers.slice(0, 3)" :key="'hero-'+index" 
-                 class="card slant-box" :class="index === 0 ? 'rank-1' : 'rank-other'"
-                 :style="{ animationDelay: (index * 0.1) + 's' }">
-              <div class="bg-plate"></div>
-              <div class="unslant card-content">
-                <div class="card-rank">{{ index === 0 ? '1ST' : index + 1 }}</div>
-                <div class="card-name">
-                  <span>{{ driver.firstName }}</span>
-                  {{ driver.lastName }}
-                </div>
-                <img v-if="driver.photo" :src="driver.photo" class="card-photo">
-              </div>
+<div class="wrc-ui-container">
+    <div class="wrc-main-bar">
+        <div class="wrc-zone-orange">
+            <div class="wrc-time-wrapper wrc-text-shadow">
+                <span class="font-bold wrc-time-digits">10<span class="wrc-time-colon">:</span>00</span>
+                <span class="font-roman wrc-time-local">LOCAL</span>
             </div>
-          </div>
-
-          <div class="right-pane">
-            <div class="header-bar slant-box">
-              <div class="unslant" style="display:flex; width: 100%; align-items:center;">
-                <div class="title">{{ headerTitle }}</div>
-                <div class="subtitle">/ {{ headerSub }} /</div>
-              </div>
-            </div>
-
-            <div class="list-container">
-              <div v-for="(driver, index) in drivers.slice(3, 10)" :key="'list-'+index" 
-                   class="list-row slant-box"
-                   :style="{ 
-                     animationDelay: state === 'out' ? ((7 - index) * 0.05) + 's' : (0.2 + index * 0.05) + 's' 
-                   }">
-                <div class="unslant" style="display:flex; width: 100%; align-items:center;">
-                  <div class="list-rank slant-box"><div class="unslant">{{ index + 4 }}</div></div>
-                  <div class="list-name"><span>{{ driver.firstName }}</span> <strong>{{ driver.lastName }}</strong></div>
-                  
-                  <div class="list-assets">
-                    <img v-if="driver.flag" :src="driver.flag" class="list-flag">
-                    <img v-if="driver.brand" :src="driver.brand" class="list-brand">
-                  </div>
-                  
-                  <div class="list-points">{{ driver.points }} <span>PTS</span></div>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
         </div>
-      </div>
+
+        <div class="wrc-zone-gray">
+            <div class="wrc-gray-left wrc-text-shadow">
+                <span class="font-bold wrc-coming-up">COMING UP NEXT</span>
+                <span class="font-bold wrc-show-title">SHAKEDOWN LIVE</span>
+            </div>
+            <div class="wrc-gray-right wrc-text-shadow">
+                <span class="font-roman wrc-hashtag">#WRC</span>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <script>
-    const { createApp } = Vue;
+    <div class="wrc-logo-panel">
+        <div class="wrc-logo-blue">
+            <span class="font-bold wrc-logo-r">R</span>
+        </div>
+        <div class="wrc-logo-white">
+            <div class="wrc-red-badge"></div>
+            <div class="font-bold wrc-event-details">
+                RALLY FORUM<br>OKAZAKI
+            </div>
+            <div class="wrc-sponsor-grid">
+                <div class="wrc-sponsor-placeholder"></div>
+                <div class="wrc-sponsor-placeholder"></div>
+                <div class="wrc-sponsor-placeholder"></div>
+            </div>
+        </div>
+    </div>
+</div>
 
-    createApp({
-      data() {
-        return {
-          state: 'none', // 'none', 'in', 'out'
-          headerTitle: "DRIVERS' CHAMPIONSHIP",
-          headerSub: "AFTER ROUND 4",
-          drivers: [
-            { firstName: "Kalle", lastName: "ROVANPERÄ", points: 98, photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Kalle_Rovanper%C3%A4_2022.jpg/480px-Kalle_Rovanper%C3%A4_2022.jpg", flag: "", brand: "" },
-            { firstName: "Thierry", lastName: "NEUVILLE", points: 85, photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/0/07/Thierry_Neuville_2019.jpg/480px-Thierry_Neuville_2019.jpg", flag: "", brand: "" },
-            { firstName: "Elfyn", lastName: "EVANS", points: 70, photo: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Elfyn_Evans_2021.jpg/480px-Elfyn_Evans_2021.jpg", flag: "", brand: "" },
-            { firstName: "Ott", lastName: "TÄNAK", points: 65, photo: "", flag: "https://flagcdn.com/ee.svg", brand: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Hyundai_Motor_Company_logo.svg/200px-Hyundai_Motor_Company_logo.svg.png" },
-            { firstName: "Sebastien", lastName: "OGIER", points: 55, photo: "", flag: "https://flagcdn.com/fr.svg", brand: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Toyota_carlogo.svg/200px-Toyota_carlogo.svg.png" },
-            { firstName: "Takamoto", lastName: "KATSUTA", points: 40, photo: "", flag: "https://flagcdn.com/jp.svg", brand: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Toyota_carlogo.svg/200px-Toyota_carlogo.svg.png" },
-            { firstName: "Craig", lastName: "BREEN", points: 38, photo: "", flag: "https://flagcdn.com/ie.svg", brand: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Hyundai_Motor_Company_logo.svg/200px-Hyundai_Motor_Company_logo.svg.png" },
-            { firstName: "Dani", lastName: "SORDO", points: 30, photo: "", flag: "https://flagcdn.com/es.svg", brand: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Hyundai_Motor_Company_logo.svg/200px-Hyundai_Motor_Company_logo.svg.png" },
-            { firstName: "Esapekka", lastName: "LAPPI", points: 28, photo: "", flag: "https://flagcdn.com/fi.svg", brand: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5a/Hyundai_Motor_Company_logo.svg/200px-Hyundai_Motor_Company_logo.svg.png" },
-            { firstName: "Pierre-Louis", lastName: "LOUBET", points: 15, photo: "", flag: "https://flagcdn.com/fr.svg", brand: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f4/Ford_logo.svg/200px-Ford_logo.svg.png" },
-          ]
-        }
-      },
-      methods: {
-        startAnimationIn() {
-          this.state = 'none';
-          // DOMリフレッシュのために少し待つ
-          setTimeout(() => {
-            this.state = 'in';
-          }, 50);
-        },
-        startAnimationOut() {
-          this.state = 'out';
-        },
-        toggleFullScreen() {
-          const elem = this.$refs.previewArea;
-          if (!document.fullscreenElement) {
-            elem.requestFullscreen().catch(err => {
-              alert(`Error attempting to enable full-screen mode: ${err.message}`);
-            });
-          } else {
-            document.exitFullscreen();
-          }
-        }
-      }
-    }).mount('#app');
-  </script>
 </body>
 </html>
